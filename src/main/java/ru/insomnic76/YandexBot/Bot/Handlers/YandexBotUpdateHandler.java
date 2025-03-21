@@ -187,7 +187,11 @@ public class YandexBotUpdateHandler {
             state.setStep(UserStep.GREET);
             bot.execute(sendMessage);
         } else if (update.message().photo() != null) {
-            PhotoSize photo = update.message().photo()[3];
+            PhotoSize[] photos = update.message().photo();
+            if (photos.length < 1) {
+                return;
+            }
+            PhotoSize photo = photos[photos.length - 1];
             fileId = photo.fileId();
             fileName = photo.fileUniqueId();
             uploadFile(fileId, state.getProjectName(), state.getUserName(), fileName, "photo");
