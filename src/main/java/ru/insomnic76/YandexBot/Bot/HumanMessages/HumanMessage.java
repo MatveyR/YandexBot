@@ -35,6 +35,10 @@ public enum HumanMessage {
     INPUT_PROJECT_COMPLETE(new HumanMessageProps(
             "Отлично! Твой проект загружается.." + System.lineSeparator() + "Пиши ещё, если захотите добавить новый проект.",
             "Great! Your project is being uploaded..." + System.lineSeparator() + "Write more if you want to add a new project."
+    )),
+    ONE_MORE_PROJECT_BUTTON(new HumanMessageProps(
+            "Добавить ещё проект",
+            "Add one more project"
     ));
 
     private final HumanMessageProps humanMessageProps;

@@ -17,6 +17,7 @@ import ru.insomnic76.YandexBot.Bot.UserState.UserState;
 import ru.insomnic76.YandexBot.Bot.UserState.UserStep;
 import ru.insomnic76.YandexBot.Bot.Utilities.YandexDiskUtility;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -29,19 +30,26 @@ public class YandexBotUpdateHandler {
     public void handleUpdate(Update update) {
         long chatId;
         String languageCode;
+        UserStep step;
 
         if (update.message() != null) {
             chatId = update.message().from().id();
             languageCode = update.message().from().languageCode();
+            step = UserStep.GREET;
         } else if (update.callbackQuery() != null) {
             chatId = update.callbackQuery().from().id();
             languageCode = update.callbackQuery().from().languageCode();
+            if (Objects.equals(update.callbackQuery().data(), "add_one_more_project")) {
+                step = UserStep.SHARE_MY_PROJECT;
+            } else {
+                step = UserStep.GREET;
+            }
         } else {
             return;
         }
 
         if (!userStates.containsKey(chatId)) {
-            userStates.put(chatId, new UserState(chatId, UserStep.GREET, languageCode));
+            userStates.put(chatId, new UserState(chatId, step, languageCode));
         }
 
         UserState state = userStates.get(chatId);
@@ -52,9 +60,6 @@ public class YandexBotUpdateHandler {
                 break;
             case SHARE_MY_PROJECT:
                 handleStartSharing(update, state);
-                break;
-            case USER_NAME:
-                handleGetUserName(update, state);
                 break;
             case PROJECT_NAME:
                 handleGetProjectName(update, state);
@@ -69,7 +74,6 @@ public class YandexBotUpdateHandler {
                 handleGetProjectMedia(update, state);
                 break;
             case COMPLETE:
-
                 break;
         }
 
@@ -94,23 +98,8 @@ public class YandexBotUpdateHandler {
             return;
         }
 
-        if (Objects.equals(update.callbackQuery().data(), "start_sharing")) {
-            state.setStep(UserStep.USER_NAME);
-            SendMessage sendMessage = new SendMessage(
-                    state.getChatId(),
-                    HumanMessage.INPUT_USER_NAME.toString(state.getLanguageCode())
-            );
-            bot.execute(sendMessage);
-        }
-    }
-
-    private void handleGetUserName(Update update, UserState state) {
-        if (update.message() == null || update.message().text() == null) {
-            return;
-        }
-
         state.setStep(UserStep.PROJECT_NAME);
-        state.setUserName(update.message().text().trim());
+        state.setUserName("@" + update.callbackQuery().from().username());
         SendMessage sendMessage = new SendMessage(
                 state.getChatId(),
                 HumanMessage.INPUT_PROJECT_NAME.toString(state.getLanguageCode())
@@ -166,8 +155,12 @@ public class YandexBotUpdateHandler {
         state.setStep(UserStep.PROJECT_MEDIA);
         state.setProjectDesc(update.message().text().trim());
 
-        YandexDiskUtility.createAndUploadProjectDetailsToDisk(state.getUserName(), state.getProjectName(), state.getProjectFrom(), state.getProjectDesc());
-
+        YandexDiskUtility.createAndUploadProjectDetails(
+                state.getUserName(),
+                state.getProjectName(),
+                state.getProjectFrom(),
+                state.getProjectDesc()
+        );
         bot.execute(sendMessage.replyMarkup(keyboardMarkup));
     }
 
@@ -184,8 +177,13 @@ public class YandexBotUpdateHandler {
                     state.getChatId(),
                     HumanMessage.INPUT_PROJECT_COMPLETE.toString(state.getLanguageCode())
             );
-            state.setStep(UserStep.GREET);
-            bot.execute(sendMessage);
+            InlineKeyboardMarkup inlineKeyboard = new InlineKeyboardMarkup(
+                    new InlineKeyboardButton(HumanMessage.ONE_MORE_PROJECT_BUTTON.toString(state.getLanguageCode()))
+                            .callbackData("add_one_more_project")
+            );
+
+            bot.execute(sendMessage.replyMarkup(inlineKeyboard));
+            userStates.remove(state.getChatId());
         } else if (update.message().photo() != null) {
             PhotoSize[] photos = update.message().photo();
             if (photos.length < 1) {
@@ -227,14 +225,24 @@ public class YandexBotUpdateHandler {
                 fileFolder += "/Прочие файлы";
             }
 
-            YandexDiskUtility.uploadFileToDisk(fileUrl, fileFolder, filename);
+            try {
+                YandexDiskUtility.uploadFileUniversal(fileUrl, fileFolder, filename);
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+            }
+        } else {
+            System.out.println("File response from TG is not OK");
         }
     }
 
     private void initProject(UserState state) {
-        YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName());
-        YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Видео");
-        YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Картинки");
-        YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Прочие файлы");
+        try {
+            YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName());
+            YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Видео");
+            YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Картинки");
+            YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Прочие файлы");
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+        }
     }
 }
