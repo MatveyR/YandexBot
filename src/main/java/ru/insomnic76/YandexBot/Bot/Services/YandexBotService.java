@@ -16,7 +16,7 @@ public class YandexBotService {
 
     public YandexBotService(BotConfig botConfig) {
         this.bot = new TelegramBot(botConfig.telegramToken());
-        updateHandler = new YandexBotUpdateHandler(bot);
+        updateHandler = new YandexBotUpdateHandler(bot, botConfig.targetChatId());
     }
 
     @PostConstruct

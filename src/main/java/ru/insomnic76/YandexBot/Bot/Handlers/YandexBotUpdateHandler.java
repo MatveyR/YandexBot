@@ -1,31 +1,24 @@
 package ru.insomnic76.YandexBot.Bot.Handlers;
 
 import com.pengrad.telegrambot.TelegramBot;
-import com.pengrad.telegrambot.model.File;
-import com.pengrad.telegrambot.model.PhotoSize;
-import com.pengrad.telegrambot.model.Update;
-import com.pengrad.telegrambot.model.request.InlineKeyboardButton;
-import com.pengrad.telegrambot.model.request.InlineKeyboardMarkup;
-import com.pengrad.telegrambot.model.request.ReplyKeyboardMarkup;
+import com.pengrad.telegrambot.model.*;
+import com.pengrad.telegrambot.model.request.*;
 import com.pengrad.telegrambot.request.AnswerCallbackQuery;
-import com.pengrad.telegrambot.request.GetFile;
+import com.pengrad.telegrambot.request.SendMediaGroup;
 import com.pengrad.telegrambot.request.SendMessage;
-import com.pengrad.telegrambot.response.GetFileResponse;
 import lombok.AllArgsConstructor;
 import ru.insomnic76.YandexBot.Bot.HumanMessages.HumanMessage;
 import ru.insomnic76.YandexBot.Bot.UserState.UserState;
 import ru.insomnic76.YandexBot.Bot.UserState.UserStep;
-import ru.insomnic76.YandexBot.Bot.Utilities.YandexDiskUtility;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 @AllArgsConstructor
 public class YandexBotUpdateHandler {
     private final TelegramBot bot;
+    private final long targetChatId;
     private final Map<Long, UserState> userStates = new HashMap<>();
+    private final Map<Long, List<InputMedia<?>>> projectMedia = new HashMap<>();
 
     public void handleUpdate(Update update) {
         long chatId;
@@ -118,9 +111,6 @@ public class YandexBotUpdateHandler {
 
         state.setStep(UserStep.PROJECT_FROM);
         state.setProjectName(update.message().text().trim());
-
-        initProject(state);
-
         bot.execute(sendMessage);
     }
 
@@ -135,7 +125,6 @@ public class YandexBotUpdateHandler {
 
         state.setStep(UserStep.PROJECT_DESCRIPTION);
         state.setProjectFrom(update.message().text().trim());
-
         bot.execute(sendMessage);
     }
 
@@ -147,20 +136,12 @@ public class YandexBotUpdateHandler {
                 state.getChatId(),
                 HumanMessage.INPUT_PROJECT_MEDIA.toString(state.getLanguageCode())
         );
-        ReplyKeyboardMarkup keyboardMarkup =
-                new ReplyKeyboardMarkup("/done")
-                        .oneTimeKeyboard(true)
-                        .resizeKeyboard(true);
+        ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup("/done")
+                .oneTimeKeyboard(true)
+                .resizeKeyboard(true);
 
         state.setStep(UserStep.PROJECT_MEDIA);
         state.setProjectDesc(update.message().text().trim());
-
-        YandexDiskUtility.createAndUploadProjectDetails(
-                state.getUserName(),
-                state.getProjectName(),
-                state.getProjectFrom(),
-                state.getProjectDesc()
-        );
         bot.execute(sendMessage.replyMarkup(keyboardMarkup));
     }
 
@@ -169,10 +150,9 @@ public class YandexBotUpdateHandler {
             return;
         }
 
-        String fileId;
-        String fileName;
-
         if (update.message().text() != null && update.message().text().startsWith("/done")) {
+            sendProjectToTargetChat(state);
+
             SendMessage sendMessage = new SendMessage(
                     state.getChatId(),
                     HumanMessage.INPUT_PROJECT_COMPLETE.toString(state.getLanguageCode())
@@ -184,65 +164,186 @@ public class YandexBotUpdateHandler {
 
             bot.execute(sendMessage.replyMarkup(inlineKeyboard));
             userStates.remove(state.getChatId());
-        } else if (update.message().photo() != null) {
-            PhotoSize[] photos = update.message().photo();
-            if (photos.length < 1) {
-                return;
-            }
-            PhotoSize photo = photos[photos.length - 1];
-            fileId = photo.fileId();
-            fileName = photo.fileUniqueId();
-            uploadFile(fileId, state.getProjectName(), state.getUserName(), fileName, "photo");
-        } else if (update.message().video() != null) {
-            fileId = update.message().video().fileId();
-            fileName = update.message().video().fileName();
-            uploadFile(fileId, state.getProjectName(), state.getUserName(), fileName, "video");
-        } else if (update.message().document() != null) {
-            fileId = update.message().document().fileId();
-            fileName = update.message().document().fileName();
-            uploadFile(fileId, state.getProjectName(), state.getUserName(), fileName, "");
-        } else if (update.message().audio() != null) {
-            fileId = update.message().audio().fileId();
-            fileName = update.message().audio().fileName();
-            uploadFile(fileId, state.getProjectName(), state.getUserName(), fileName, "");
-        }
-    }
-
-    private void uploadFile(String fileId, String projectName, String username, String filename, String fileType) {
-        GetFile getFile = new GetFile(fileId);
-        GetFileResponse getFileResponse = bot.execute(getFile);
-
-        if (getFileResponse.isOk()) {
-            File file = getFileResponse.file();
-            String filePath = file.filePath();
-            String fileUrl = "https://api.telegram.org/file/bot" + bot.getToken() + "/" + filePath;
-            String fileFolder = projectName + "-" + username;
-            if (Objects.equals(fileType, "photo")) {
-                fileFolder += "/Картинки";
-            } else if (Objects.equals(fileType, "video")) {
-                fileFolder += "/Видео";
-            } else {
-                fileFolder += "/Прочие файлы";
-            }
-
-            try {
-                YandexDiskUtility.uploadFileUniversal(fileUrl, fileFolder, filename);
-            } catch (Exception e) {
-                System.out.println(e.getMessage());
-            }
+            projectMedia.remove(state.getChatId());
         } else {
-            System.out.println("File response from TG is not OK");
+            saveMediaForProject(update, state);
         }
     }
 
-    private void initProject(UserState state) {
+    private void saveMediaForProject(Update update, UserState state) {
+        final long MAX_FILE_SIZE = 1536 * 1024 * 1024;
+        List<InputMedia<?>> mediaList = projectMedia.computeIfAbsent(state.getChatId(), k -> new ArrayList<>());
+
         try {
-            YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName());
-            YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Видео");
-            YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Картинки");
-            YandexDiskUtility.makeDir(state.getProjectName() + "-" + state.getUserName() + "/Прочие файлы");
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
+            if (update.message().photo() != null) {
+                PhotoSize[] photos = update.message().photo();
+                if (photos.length > 0) {
+                    PhotoSize photo = photos[photos.length - 1];
+                    if (photo.fileSize() <= MAX_FILE_SIZE) {
+                        mediaList.add(new InputMediaPhoto(photo.fileId()));
+                    } else {
+                        bot.execute(new SendMessage(state.getChatId(), HumanMessage.ERROR_LARGE_FILE.toString()));
+                    }
+                }
+            }
+            else if (update.message().video() != null) {
+                Video video = update.message().video();
+                if (video.fileSize() <= MAX_FILE_SIZE) {
+                    mediaList.add(new InputMediaVideo(video.fileId()));
+                } else {
+                    bot.execute(new SendMessage(state.getChatId(), HumanMessage.ERROR_LARGE_FILE.toString()));
+                }
+            }
+            else if (update.message().document() != null) {
+                Document document = update.message().document();
+                if (document.fileSize() <= MAX_FILE_SIZE) {
+                    mediaList.add(new InputMediaDocument(document.fileId()));
+                } else {
+                    bot.execute(new SendMessage(state.getChatId(), HumanMessage.ERROR_LARGE_FILE.toString()));
+                }
+            }
+            else if (update.message().audio() != null) {
+                mediaList.add(new InputMediaAudio(update.message().audio().fileId()));
+            }
+        } catch (Exception e) {
+            bot.execute(new SendMessage(state.getChatId(),
+                    "⚠️ Ошибка при обработке файла. Попробуйте отправить его снова."));
+        }
+    }
+
+    private void sendProjectToTargetChat(UserState state) {
+        String projectTag = "#" + state.getProjectName().replaceAll("\\s+", "_").toLowerCase();
+        String fullDescription = state.getProjectDesc();
+
+        String header = String.format(
+                """
+                📌 *Новый проект!* %s #проект
+                
+                👤 Автор: %s
+                🏷 Название: %s
+                📍 Откуда: %s
+                """,
+                projectTag,
+                state.getUserName(),
+                state.getProjectName(),
+                state.getProjectFrom()
+        );
+
+        int availableCaptionLength = 1024 - header.length() - 10;
+        boolean isDescriptionTooLong = fullDescription.length() > availableCaptionLength;
+
+        String caption = header + "📝 Описание:\n" +
+                (isDescriptionTooLong
+                        ? fullDescription.substring(0, availableCaptionLength - 4) + "..."
+                        : fullDescription);
+
+        List<InputMedia<?>> mediaList = projectMedia.get(state.getChatId());
+
+        if (mediaList == null || mediaList.isEmpty()) {
+            sendTextMessageWithSplitting(targetChatId,
+                    header + "📝 Полное описание:\n" + fullDescription,
+                    projectTag);
+            return;
+        }
+
+        List<InputMedia<?>> documents = new ArrayList<>();
+        List<InputMedia<?>> otherFiles = new ArrayList<>();
+
+        for (InputMedia<?> media : mediaList) {
+            if (media instanceof InputMediaDocument) {
+                documents.add(media);
+            } else if ((media instanceof InputMediaVideo) || (media instanceof InputMediaPhoto)) {
+                otherFiles.add(media);
+            }
+        }
+
+        if (otherFiles.isEmpty() && !documents.isEmpty()) {
+            bot.execute(new SendMessage(targetChatId, caption).parseMode(ParseMode.Markdown));
+
+            if (isDescriptionTooLong) {
+                String remainingText = fullDescription.substring(availableCaptionLength - 4);
+                sendTextMessageWithSplitting(targetChatId,
+                        "📝 Описание (продолжение):\n" + remainingText,
+                        projectTag);
+            }
+        }
+
+        if (!otherFiles.isEmpty()) {
+            InputMedia<?>[] mainBatch = otherFiles.stream()
+                    .limit(10)
+                    .toArray(InputMedia<?>[]::new);
+
+            if (mainBatch.length > 0 && (mainBatch[0] instanceof InputMediaPhoto)) {
+                ((InputMediaPhoto) mainBatch[0]).caption(caption).parseMode(ParseMode.Markdown);
+            } else if (mainBatch.length > 0 && (mainBatch[0] instanceof InputMediaVideo)) {
+                ((InputMediaVideo) mainBatch[0]).caption(caption).parseMode(ParseMode.Markdown);
+            }
+            bot.execute(new SendMediaGroup(targetChatId, mainBatch));
+
+            if (isDescriptionTooLong) {
+                String remainingText = fullDescription.substring(availableCaptionLength - 4);
+                sendTextMessageWithSplitting(targetChatId,
+                        "📝 Описание (продолжение):\n" + remainingText,
+                        projectTag);
+            }
+
+            if (otherFiles.size() > 10) {
+                String continuationCaption = projectTag + " #проект #продолжение";
+                for (int i = 10; i < otherFiles.size(); i += 10) {
+                    InputMedia<?>[] batch = otherFiles.stream()
+                            .skip(i)
+                            .limit(10)
+                            .toArray(InputMedia<?>[]::new);
+
+                    if (batch.length > 0 && batch[0] instanceof InputMediaPhoto) {
+                        ((InputMediaPhoto) batch[0]).caption(continuationCaption).parseMode(ParseMode.Markdown);
+                    } else if (batch.length > 0 && batch[0] instanceof InputMediaVideo) {
+                        ((InputMediaVideo) batch[0]).caption(continuationCaption).parseMode(ParseMode.Markdown);
+                    }
+                    bot.execute(new SendMediaGroup(targetChatId, batch));
+                }
+            }
+        }
+
+        if (!documents.isEmpty()) {
+            String docsCaption = "📎 Документы проекта:\n" + projectTag + " #проект #документы";
+
+            InputMedia<?>[] docsBatch = documents.stream()
+                    .limit(10)
+                    .toArray(InputMedia<?>[]::new);
+
+            if (docsBatch.length > 0) {
+                ((InputMediaDocument) docsBatch[docsBatch.length - 1]).caption(docsCaption).parseMode(ParseMode.Markdown);
+            }
+            bot.execute(new SendMediaGroup(targetChatId, docsBatch));
+
+            if (documents.size() > 10) {
+                String docsContinuation = projectTag + " #проект #документы #продолжение";
+                for (int i = 10; i < documents.size(); i += 10) {
+                    InputMedia<?>[] batch = documents.stream()
+                            .skip(i)
+                            .limit(10)
+                            .toArray(InputMedia<?>[]::new);
+
+                    if (batch.length > 0) {
+                        ((InputMediaDocument) batch[batch.length - 1]).caption(docsContinuation).parseMode(ParseMode.Markdown);
+                    }
+                    bot.execute(new SendMediaGroup(targetChatId, batch));
+                }
+            }
+        }
+    }
+
+    private void sendTextMessageWithSplitting(Long chatId, String text, String projectTag) {
+        int maxLength = 4096 - projectTag.length() - 10;
+        String hashtags = "\n\n" + projectTag + " #проект";
+
+        for (int i = 0; i < text.length(); i += maxLength) {
+            String part = text.substring(i, Math.min(i + maxLength, text.length()));
+            boolean isLastPart = (i + maxLength) >= text.length();
+
+            String message = isLastPart ? part + hashtags : part;
+            bot.execute(new SendMessage(chatId, message).parseMode(ParseMode.Markdown));
         }
     }
 }

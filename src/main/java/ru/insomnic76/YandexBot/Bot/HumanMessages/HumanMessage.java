@@ -25,15 +25,19 @@ public enum HumanMessage {
             "Write in one message where your project is from: region, country and city:"
     )),
     INPUT_PROJECT_DESCRIPTION(new HumanMessageProps(
-            "Опиши проект: О чем он? Какие цели? Каких результатов добились? Также укажите команду проекта.",
-            "Describe your project: what is it about? what are the goals? Also specify the project team."
+            "Опиши проект: О чем он? Какие цели? Каких результатов добились? Также укажи команду проекта" + System.lineSeparator() + "Максимальный размер описания - 4000 символов",
+            "Describe your project: what is it about? what are the goals? Also specify the project team" + System.lineSeparator() + "The maximum description size is 4000 characters"
     )),
     INPUT_PROJECT_MEDIA(new HumanMessageProps(
-            "Прикрепи файлы проекта: фото, видео, документы. Когда загрузишь все файлы нажми кнопку \"/done\".",
-            "Attach your project files: pictures, videos, documents. When all the files are uploaded, click \"/done\"."
+            "Прикрепи файлы проекта: фото, видео, документы " + System.lineSeparator() + "Размер каждого отдельного файла ограничен 1.5 гигабайтами" + System.lineSeparator() + "Когда загрузишь все файлы нажми кнопку \"/done\"",
+            "Attach your project files: pictures, videos, documents " + System.lineSeparator() + "The size of each file is limited to 1.5 gigabytes" + System.lineSeparator() + "When all the files are uploaded, click \"/done\""
+    )),
+    ERROR_LARGE_FILE(new HumanMessageProps(
+            "Размер файла превышает 1.5 гигабайта! Файл не сохранён",
+            "The file size exceeds 1.5 GB! The file was not saved"
     )),
     INPUT_PROJECT_COMPLETE(new HumanMessageProps(
-            "Отлично! Твой проект загружается.." + System.lineSeparator() + "Пиши ещё, если захотите добавить новый проект.",
+            "Отлично! Твой проект загружается.." + System.lineSeparator() + "Пиши ещё, если захочешь добавить новый проект.",
             "Great! Your project is being uploaded..." + System.lineSeparator() + "Write more if you want to add a new project."
     )),
     ONE_MORE_PROJECT_BUTTON(new HumanMessageProps(
