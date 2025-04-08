@@ -212,12 +212,12 @@ public class YandexBotUpdateHandler {
     }
 
     private void sendProjectToTargetChat(UserState state) {
-        String projectTag = "#" + state.getProjectName().replaceAll("\\s+", "_").toLowerCase();
+        String projectTag = "#" + state.getProjectName().trim().replaceAll(" ", "_").toLowerCase();
         String fullDescription = state.getProjectDesc();
 
         String header = String.format(
                 """
-                📌 *Новый проект!* %s #проект
+                📌 Новый проект! %s #проект
                 
                 👤 Автор: %s
                 🏷 Название: %s
@@ -258,7 +258,7 @@ public class YandexBotUpdateHandler {
         }
 
         if (otherFiles.isEmpty() && !documents.isEmpty()) {
-            bot.execute(new SendMessage(targetChatId, caption).parseMode(ParseMode.Markdown));
+            bot.execute(new SendMessage(targetChatId, caption));
 
             if (isDescriptionTooLong) {
                 String remainingText = fullDescription.substring(availableCaptionLength - 4);
@@ -274,9 +274,9 @@ public class YandexBotUpdateHandler {
                     .toArray(InputMedia<?>[]::new);
 
             if (mainBatch.length > 0 && (mainBatch[0] instanceof InputMediaPhoto)) {
-                ((InputMediaPhoto) mainBatch[0]).caption(caption).parseMode(ParseMode.Markdown);
+                ((InputMediaPhoto) mainBatch[0]).caption(caption);
             } else if (mainBatch.length > 0 && (mainBatch[0] instanceof InputMediaVideo)) {
-                ((InputMediaVideo) mainBatch[0]).caption(caption).parseMode(ParseMode.Markdown);
+                ((InputMediaVideo) mainBatch[0]).caption(caption);
             }
             bot.execute(new SendMediaGroup(targetChatId, mainBatch));
 
@@ -296,9 +296,9 @@ public class YandexBotUpdateHandler {
                             .toArray(InputMedia<?>[]::new);
 
                     if (batch.length > 0 && batch[0] instanceof InputMediaPhoto) {
-                        ((InputMediaPhoto) batch[0]).caption(continuationCaption).parseMode(ParseMode.Markdown);
+                        ((InputMediaPhoto) batch[0]).caption(continuationCaption);
                     } else if (batch.length > 0 && batch[0] instanceof InputMediaVideo) {
-                        ((InputMediaVideo) batch[0]).caption(continuationCaption).parseMode(ParseMode.Markdown);
+                        ((InputMediaVideo) batch[0]).caption(continuationCaption);
                     }
                     bot.execute(new SendMediaGroup(targetChatId, batch));
                 }
@@ -313,7 +313,7 @@ public class YandexBotUpdateHandler {
                     .toArray(InputMedia<?>[]::new);
 
             if (docsBatch.length > 0) {
-                ((InputMediaDocument) docsBatch[docsBatch.length - 1]).caption(docsCaption).parseMode(ParseMode.Markdown);
+                ((InputMediaDocument) docsBatch[docsBatch.length - 1]).caption(docsCaption);
             }
             bot.execute(new SendMediaGroup(targetChatId, docsBatch));
 
@@ -326,7 +326,7 @@ public class YandexBotUpdateHandler {
                             .toArray(InputMedia<?>[]::new);
 
                     if (batch.length > 0) {
-                        ((InputMediaDocument) batch[batch.length - 1]).caption(docsContinuation).parseMode(ParseMode.Markdown);
+                        ((InputMediaDocument) batch[batch.length - 1]).caption(docsContinuation);
                     }
                     bot.execute(new SendMediaGroup(targetChatId, batch));
                 }
@@ -343,7 +343,7 @@ public class YandexBotUpdateHandler {
             boolean isLastPart = (i + maxLength) >= text.length();
 
             String message = isLastPart ? part + hashtags : part;
-            bot.execute(new SendMessage(chatId, message).parseMode(ParseMode.Markdown));
+            bot.execute(new SendMessage(chatId, message));
         }
     }
 }
