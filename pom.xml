@@ -92,7 +92,7 @@
 						<manifest>
 							<addClasspath>true</addClasspath>
 							<classpathPrefix>lib/</classpathPrefix>
-							<mainClass>ru.insomnic76.YandexBot</mainClass>
+							<mainClass>ru.insomnic76.YandexBot.YandexBotApplication</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
