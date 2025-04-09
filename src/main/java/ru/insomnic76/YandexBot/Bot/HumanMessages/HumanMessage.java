@@ -1,8 +1,5 @@
 package ru.insomnic76.YandexBot.Bot.HumanMessages;
 
-import lombok.ToString;
-
-@ToString
 public enum HumanMessage {
     HELLO(new HumanMessageProps(
             "Привет! Я бот Yango Group. Если хочешь поделиться проектом просто нажми кнопку ниже.",
@@ -51,12 +48,13 @@ public enum HumanMessage {
         this.humanMessageProps = humanMessageProps;
     }
 
+    public String toString() {
+        return humanMessageProps.engMessage();
+    }
+
     public String toString(String code) {
-        switch (code) {
-            case "ru":
-                return humanMessageProps.rusMessage();
-            default:
-                return humanMessageProps.engMessage();
-        }
+        if (code == null) code = "en";
+        return "ru".equals(code) ? humanMessageProps.rusMessage()
+                : humanMessageProps.engMessage();
     }
 }
